@@ -1,18 +1,29 @@
 # Sentiment Transformer Architecture
 
-**Feras Elghandour** · Technical case study
-
 Classify variable-length review token sequences with explicit causal attention and padding behavior.
 
 ## Implementation
 
 An independently implemented PyTorch transformer classifier with token/position embeddings, a causal mask, a padding mask, and final-valid-token classification.
 
-```mermaid
-flowchart LR
-    A[Validated inputs] --> B[Core implementation]
-    B --> C[Behavior and error checks]
-    C --> D[Inspectable outcome]
+![Implementation mechanism: Token IDs with right padding → Token and position embeddings → Causal and padding attention masks → Transformer encoder → Last valid token to two class logits](assets/mechanism.svg)
+
+## Try a small example
+
+An untrained model checks that right padding leaves the same sequence output unchanged. This is an attention-mask check, not sentiment accuracy.
+
+After the local setup below, run from the repository root:
+
+```sh
+python examples/quickstart.py
+```
+
+The [example source](examples/quickstart.py), [captured output](examples/expected-output.txt) and [execution record](examples/environment.json) keep this demonstration inspectable. Floating-point values may vary with library versions.
+
+Observed output from this run:
+
+```text
+{'logit_shape': [2, 2], 'padding_invariant': True}
 ```
 
 ## Evidence and results
@@ -32,7 +43,7 @@ python -m pip install -r requirements.txt
 python smoke_test.py
 ```
 
-See [DATA.md](DATA.md) for input contracts and [VALIDATION.md](VALIDATION.md) for the verification scope. The modules expose small APIs that can be integrated into a larger workflow.
+See [DATA.md](DATA.md) for input contracts and [VALIDATION.md](VALIDATION.md) for the verification scope. 
 
 ## Practical relevance and limitations
 
