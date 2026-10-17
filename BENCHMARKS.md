@@ -73,3 +73,14 @@ Exact published fresh-training budgets on identically prepared splits; CPU refer
 ```
 
 The observed local runtime is recorded in [reference-environment-macos.json](reference-environment-macos.json). The reproduction driver hashes source files and inputs for each run. Published result records retain their own original runtime and revision; changing the device or budget creates a different experiment.
+
+## Pinned local reference installation
+
+[requirements-reference-macos.txt](requirements-reference-macos.txt) pins the installed runtime/test dependency closure for Python 3.14.3 on macOS ARM64. It accompanies the observed environment record. It is a platform-specific reference snapshot, not a Linux/CUDA lock; a new empty-environment installation has not been independently certified. The GitHub checks use their separately declared Linux environment.
+
+```sh
+python3.14 -m venv .venv-reference
+.venv-reference/bin/python -m pip install -r requirements-reference-macos.txt
+```
+
+Use the recorded exact Python patch version when comparing numerical results. Notebook tooling and optional FID dependencies are outside this runtime/test snapshot.
