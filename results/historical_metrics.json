@@ -1,0 +1,25 @@
+{
+  "test_accuracy": 82.88,
+  "test_loss": 0.44829398794174197,
+  "test_reviews": 25000,
+  "best_validation_accuracy": 85.92,
+  "best_epoch": 2,
+  "epochs_run": 5,
+  "config": {
+    "vocabulary_size": 30522,
+    "num_classes": 2,
+    "d_embed": 256,
+    "context_size": 256,
+    "layers_num": 4,
+    "heads_num": 4,
+    "head_size": 32,
+    "dropout_rate": 0.1,
+    "use_bias": true,
+    "pad_id": 0
+  },
+  "seed": 42,
+  "training_reviews": 22500,
+  "validation_reviews": 2500,
+  "pytorch_version": "2.3.0",
+  "device": "cuda"
+}
