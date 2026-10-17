@@ -8,6 +8,9 @@ import csv
 import hashlib
 import json
 import random
+import os
+import time
+os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
 import sys
 from pathlib import Path
 import numpy as np
@@ -29,36 +32,48 @@ def metrics(y, pred, classes):
 
 
 def main(build_model, default_config, binary=False, tokens=False):
+    started=time.perf_counter()
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--data',type=Path,required=True);ap.add_argument('--output',type=Path,required=True)
+    ap.add_argument('--device',choices=['cpu','cuda','mps'],default='cpu')
+    ap.add_argument('--allow-nondeterministic',action='store_true',help='Explicit accelerator throughput mode; no exact continuation claim')
     ap.add_argument('--epochs',type=int,default=25);ap.add_argument('--batch-size',type=int,default=128)
     ap.add_argument('--seed',type=int,default=7);ap.add_argument('--lr',type=float,default=.001)
     ap.add_argument('--config',type=Path);ap.add_argument('--checkpoint',type=Path)
     ap.add_argument('--evaluate-only',action='store_true');ap.add_argument('--resume',action='store_true')
     ap.add_argument('--precision-floor',type=float,default=.72)
     a=ap.parse_args()
+    device=torch.device(a.device)
+    if device.type=='cuda' and not torch.cuda.is_available():raise ValueError('CUDA requested but unavailable; choose --device cpu explicitly')
+    if device.type=='mps' and not torch.backends.mps.is_available():raise ValueError('MPS requested but unavailable')
     if a.epochs<1 or a.batch_size<2 or a.lr<=0:raise ValueError('Positive epochs/lr and batch size >=2 required')
     if a.evaluate_only and a.checkpoint is None:raise ValueError('--evaluate-only requires --checkpoint')
     if a.resume and a.checkpoint is None:raise ValueError('--resume requires --checkpoint')
     if a.output.exists() and any(a.output.iterdir()):raise ValueError('Use a new empty output directory; prior results are never overwritten')
     a.output.mkdir(parents=True,exist_ok=True)
     random.seed(a.seed);np.random.seed(a.seed);torch.manual_seed(a.seed);torch.set_num_threads(2)
-    torch.use_deterministic_algorithms(True)
+    torch.use_deterministic_algorithms(not a.allow_nondeterministic)
     config=dict(default_config)
     if a.config:config.update(json.loads(a.config.read_text()))
     ck=torch.load(a.checkpoint,map_location='cpu',weights_only=True) if a.checkpoint else None
     if ck:
         config=ck['config'];a.seed=int(ck['seed'])
-    model=build_model(config).cpu();optimizer=torch.optim.AdamW(model.parameters(),lr=a.lr)
+    model=build_model(config).to(device);optimizer=torch.optim.AdamW(model.parameters(),lr=a.lr)
+    contract={'data_sha256':sha(a.data),'batch_size':a.batch_size,'seed':a.seed,'device':str(device),'torch':str(torch.__version__),'learning_rate':a.lr,'deterministic_algorithms':not getattr(a,'allow_nondeterministic',False)}
     best=float('inf');start=0;history=[]
     rng=torch.Generator().manual_seed(a.seed)
     if ck:
         model.load_state_dict(ck['model_state'],strict=True)
         if a.resume:
+            if ck.get('training_contract')!=contract:raise ValueError('Resume requires identical data, batch size, seed, device, runtime and optimizer configuration; older checkpoints remain inference-only')
+            if ck.get('deterministic_algorithms',True)!=(not a.allow_nondeterministic):raise ValueError('Resume requires the original determinism setting')
+            if ck.get('device','cpu')!=str(device):raise ValueError('Exact resume requires the original device type')
             if ck['data_sha256']!=sha(a.data):raise ValueError('Resume requires identical prepared dataset bytes')
             optimizer.load_state_dict(ck['optimizer_state']);start=ck['epoch'];best=ck['validation_loss'];history=ck['history']
             if best>min(r['validation_loss'] for r in history)+1e-10:raise ValueError('Resume from the selected best.pt checkpoint, not last.pt')
             torch.set_rng_state(ck['torch_rng']);rng.set_state(ck['loader_rng'])
+            if device.type=='cuda':torch.cuda.set_rng_state_all(ck['cuda_rng'])
+            if device.type=='mps':torch.mps.set_rng_state(ck['mps_rng'])
     with np.load(a.data,allow_pickle=False) as z:
         arrays={key:z[key].copy() for key in ('x_train','y_train','x_val','y_val','x_test','y_test')}
     classes=2 if binary else int(config['classes'])
@@ -75,6 +90,7 @@ def main(build_model, default_config, binary=False, tokens=False):
         model.eval();total=0.;ys=[];probs=[]
         with torch.no_grad():
             for x,y in loaders[split]:
+                x,y=x.to(device),y.to(device)
                 logits=model(x);target=y.float().reshape(-1,1) if binary else y
                 loss=loss_fn(logits,target);total+=loss.item()*len(y)
                 ys.extend(y.tolist());probs.extend(logits.sigmoid().reshape(-1).tolist() if binary else logits.softmax(-1).tolist())
@@ -84,13 +100,15 @@ def main(build_model, default_config, binary=False, tokens=False):
         for epoch in range(start,a.epochs):
             model.train();total=0.;n=0
             for x,y in loaders['train']:
+                x,y=x.to(device),y.to(device)
                 optimizer.zero_grad(set_to_none=True);logits=model(x)
                 loss=loss_fn(logits,y.float().reshape(-1,1) if binary else y)
                 if not torch.isfinite(loss):raise FloatingPointError('Nonfinite training loss')
                 loss.backward();torch.nn.utils.clip_grad_norm_(model.parameters(),5.);optimizer.step();total+=loss.item()*len(y);n+=len(y)
             vl,_,_=evaluate('val');history.append({'epoch':epoch+1,'train_loss':total/n,'validation_loss':vl})
             print(json.dumps(history[-1]),flush=True)
-            state={'model_state':model.state_dict(),'optimizer_state':optimizer.state_dict(),'config':config,'epoch':epoch+1,'seed':a.seed,'validation_loss':vl,'history':history,'data_sha256':sha(a.data),'torch_rng':torch.get_rng_state(),'loader_rng':rng.get_state()}
+            state={'training_contract':contract,'model_state':model.state_dict(),'optimizer_state':optimizer.state_dict(),'config':config,'epoch':epoch+1,'seed':a.seed,'validation_loss':vl,'history':history,'data_sha256':sha(a.data),'torch_rng':torch.get_rng_state(),'loader_rng':rng.get_state()}
+            state.update({'deterministic_algorithms':not a.allow_nondeterministic,'device':str(device),'cuda_rng':torch.cuda.get_rng_state_all() if device.type=='cuda' else None,'mps_rng':torch.mps.get_rng_state() if device.type=='mps' else None})
             torch.save(state,a.output/'last.pt')
             if vl<best:best=vl;torch.save(state,a.output/'best.pt')
         # If resuming and no later epoch improves, the supplied checkpoint remains the selected one.
@@ -113,7 +131,8 @@ def main(build_model, default_config, binary=False, tokens=False):
     torch.save(inference,a.output/'inference.pt')
     tl,y,p=evaluate('test');pred=(p>=threshold).astype(int) if binary else p.argmax(1)
     result={'protocol':'validation-selected checkpoint; one final held-out evaluation','config':config,'seed':a.seed,'selected_epoch':state['epoch'],'test':{**metrics(y,pred,classes),'loss':tl},'validation_threshold':validation,'data_sha256':sha(a.data),'checkpoint_sha256':sha(selected),'split_rows':{s:len(arrays['y_'+s]) for s in ('train','val','test')},'python':sys.version.split()[0],'numpy':np.__version__,'torch':torch.__version__,'evaluate_only':a.evaluate_only,'majority_class_baseline_accuracy':float((y==np.bincount(arrays['y_train'].astype(int),minlength=classes).argmax()).mean()),'inference_checkpoint_sha256':sha(a.output/'inference.pt')}
-    result['training_arguments']=None if a.evaluate_only else {'total_epochs':a.epochs,'batch_size':a.batch_size,'learning_rate':a.lr,'optimizer':'AdamW','gradient_clip_norm':5,'resumed':a.resume,'seed':a.seed}
+    result['training_arguments']=None if a.evaluate_only else {'total_epochs':a.epochs,'batch_size':a.batch_size,'learning_rate':optimizer.param_groups[0]['lr'],'optimizer':'AdamW','gradient_clip_norm':5,'resumed':a.resume,'seed':a.seed}
+    result['execution']={'deterministic_algorithms':not a.allow_nondeterministic,'device':str(device),'precision':'float32','elapsed_seconds':time.perf_counter()-started,'torch_threads':torch.get_num_threads()}
     (a.output/'metrics.json').write_text(json.dumps(result,indent=2)+'\n');(a.output/'history.json').write_text(json.dumps(history,indent=2)+'\n')
     with (a.output/'predictions.csv').open('w',newline='') as f:
         w=csv.writer(f);w.writerow(['test_index','label','prediction','probabilities'])

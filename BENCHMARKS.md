@@ -12,8 +12,9 @@ Use a new output directory for each run. The driver writes command logs, source/
 
 | Profile | Actual scope | Required inputs |
 |---|---|---|
-| `checks` | Offline behavioral regressions; not a fresh dataset benchmark | None |
-| `train` | New reference training protocol on supplied fixed splits; validation-selected checkpoint and held-out metrics | data, config |
+| `checks` | Offline source and generated-data training, checkpoint selection and inference reload checks; not a real-data benchmark | None |
+| `train` | Configurable training on supplied fixed splits; default budget differs from named published reference protocols | data, config |
+| `reference-training` | Exact published fresh-training budgets on identically prepared splits; CPU reference; checkpoint selection uses validation only | data, config |
 
 Supply named paths with `--input name=/absolute/path`. Exact commands are versioned in [reproduction.json](reproduction.json); direct training commands and preparation contracts are below.
 
@@ -35,9 +36,20 @@ python predict.py --checkpoint checkpoints/model.pt --vocabulary checkpoints/voc
 
 To use the mirror, replace `--archive` with `--train-parquet train.parquet --test-parquet test.parquet`. `74.9%` describes this reduced-data protocol, not a full-data score. Vocabulary hash binding is checked at inference.
 
+
+## Device selection
+
+`train.py --device cpu` is the default reference path. `--device mps` explicitly selects an Apple Silicon GPU; `--device cuda` requires a CUDA GPU. Unsupported or unavailable devices fail explicitly. No automatic CPU fallback is enabled. Metrics record the device, runtime and elapsed time. CPU and GPU runs are separate numerical protocols; equal seeds do not imply equal weights or results across devices. Resume requires the checkpoint's original device type and saves its accelerator RNG state.
+
+For a generated-data device integration check, set `TRAIN_TEST_DEVICE=mps` when running `python test_training_pipeline.py`. This checks training and checkpoint reload, not real-data model quality.
+
+Strict MPS training currently fails for the transformer's embedding backward operation in the tested runtime. To explicitly accept nondeterministic operations, add `--allow-nondeterministic`; this mode is recorded and does not claim exact resumed or repeated weights. The strict CPU path remains the reference. To check this GPU route, run `TRAIN_TEST_DEVICE=mps TRAIN_TEST_ALLOW_NONDETERMINISTIC=1 python test_training_pipeline.py`.
+
 ## Recorded command definitions
 
 ### checks
+
+Offline source and generated-data training, checkpoint selection and inference reload checks; not a real-data benchmark
 
 ```text
 {python} smoke_test.py
@@ -46,8 +58,18 @@ To use the mirror, replace `--archive` with `--train-parquet train.parquet --tes
 
 ### train
 
+Configurable training on supplied fixed splits; default budget differs from named published reference protocols
+
 ```text
 {python} train.py --data {input:data} --config {input:config} --output {output}/training
 ```
 
-`{python}` is the current interpreter. `{output}` is the new run directory. `{input:name}` refers to a named absolute input path supplied to the driver. Install declared dependencies in a clean environment before executing. Never execute untrusted serialized models or notebooks.
+### reference-training
+
+Exact published fresh-training budgets on identically prepared splits; CPU reference; checkpoint selection uses validation only
+
+```text
+{python} train.py --data {input:data} --config {input:config} --epochs 10 --batch-size 64 --seed 7 --device cpu --output {output}/reference-7
+```
+
+The observed local runtime is recorded in [reference-environment-macos.json](reference-environment-macos.json). The reproduction driver hashes source files and inputs for each run. Published result records retain their own original runtime and revision; changing the device or budget creates a different experiment.

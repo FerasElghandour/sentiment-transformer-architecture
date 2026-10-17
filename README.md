@@ -59,3 +59,7 @@ See [DATA.md](DATA.md) for input contracts and [VALIDATION.md](VALIDATION.md) fo
 The public architecture has separate shape, gradient, and padding-invariance checks. Its configuration and implementation differ from the historical model, so its accuracy must be measured in a new training run. No pretrained weights, review corpus, or supplied notebook is included.
 
 No client deployment, commercial outcome, or new live-provider performance is inferred from the component tests.
+
+## Reuse
+
+Original reproduction and validation tooling is available under MIT; see [LICENSING.md](LICENSING.md) for the explicit file scope and preserved upstream, dataset and checkpoint terms.

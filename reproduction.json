@@ -2,7 +2,7 @@
   "repository": "sentiment-transformer-architecture",
   "profiles": {
     "checks": {
-      "scope": "Offline behavioral regressions; not a fresh dataset benchmark",
+      "scope": "Offline source and generated-data training, checkpoint selection and inference reload checks; not a real-data benchmark",
       "commands": [
         [
           "{python}",
@@ -15,7 +15,7 @@
       ]
     },
     "train": {
-      "scope": "New reference training protocol on supplied fixed splits; validation-selected checkpoint and held-out metrics",
+      "scope": "Configurable training on supplied fixed splits; default budget differs from named published reference protocols",
       "required_inputs": [
         "data",
         "config"
@@ -30,6 +30,33 @@
           "{input:config}",
           "--output",
           "{output}/training"
+        ]
+      ]
+    },
+    "reference-training": {
+      "scope": "Exact published fresh-training budgets on identically prepared splits; CPU reference; checkpoint selection uses validation only",
+      "required_inputs": [
+        "data",
+        "config"
+      ],
+      "commands": [
+        [
+          "{python}",
+          "train.py",
+          "--data",
+          "{input:data}",
+          "--config",
+          "{input:config}",
+          "--epochs",
+          "10",
+          "--batch-size",
+          "64",
+          "--seed",
+          "7",
+          "--device",
+          "cpu",
+          "--output",
+          "{output}/reference-7"
         ]
       ]
     }
