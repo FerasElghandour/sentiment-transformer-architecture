@@ -14,3 +14,8 @@ try:model(torch.tensor([[1,0,2]]))
 except ValueError:pass
 else:raise AssertionError('Interior padding accepted')
 print('Causal classifier shapes, right-padding invariance, finite gradients, and padding guards passed.')
+
+try:SentimentTransformer(heads=0)
+except ValueError:pass
+else:raise AssertionError('Zero attention heads accepted')
+print('Invalid attention dimensions are rejected explicitly.')

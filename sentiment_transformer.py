@@ -5,7 +5,7 @@ from torch import nn
 class SentimentTransformer(nn.Module):
     def __init__(self,vocabulary=30522,width=128,heads=4,layers=4,context=256,pad_id=0):
         super().__init__()
-        if width%heads or min(vocabulary,width,heads,layers,context)<1:raise ValueError('Positive compatible model dimensions required')
+        if min(vocabulary,width,heads,layers,context)<1 or width%heads:raise ValueError('Positive compatible model dimensions required')
         self.context,self.pad_id=context,pad_id
         self.tokens=nn.Embedding(vocabulary,width,padding_idx=pad_id)
         self.position=nn.Embedding(context,width)
