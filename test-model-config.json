@@ -1,0 +1,9 @@
+{
+  "classes": 2,
+  "vocabulary": 20,
+  "width": 16,
+  "heads": 2,
+  "layers": 1,
+  "context": 8,
+  "_fixture": "tokens"
+}

@@ -1,0 +1,5 @@
+{
+  "checkpoint_sha256": "74ec4fc5ed7390bf705b1d700f4455c219c4532b842b3859d7dd4fb5ae490887",
+  "source_best_checkpoint_sha256": "a712692aa399543a014c6305b1f7c3cb25b501c5d1fb97e196f0d379565d9640",
+  "conversion": "Model tensors/config retained; optimizer state removed; validation threshold and train-fitted preprocessing/tokenizer binding included."
+}

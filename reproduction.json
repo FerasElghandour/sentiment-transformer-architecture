@@ -1,0 +1,46 @@
+{
+  "repository": "sentiment-transformer-architecture",
+  "profiles": {
+    "checks": {
+      "scope": "Offline behavioral regressions; not a fresh dataset benchmark",
+      "commands": [
+        [
+          "{python}",
+          "smoke_test.py"
+        ],
+        [
+          "{python}",
+          "test_training_pipeline.py"
+        ]
+      ]
+    },
+    "train": {
+      "scope": "New reference training protocol on supplied fixed splits; validation-selected checkpoint and held-out metrics",
+      "required_inputs": [
+        "data",
+        "config"
+      ],
+      "commands": [
+        [
+          "{python}",
+          "train.py",
+          "--data",
+          "{input:data}",
+          "--config",
+          "{input:config}",
+          "--output",
+          "{output}/training"
+        ]
+      ]
+    }
+  },
+  "version_packages": [
+    "numpy",
+    "torch",
+    "pandas",
+    "scikit-learn",
+    "gymnasium",
+    "pytest"
+  ],
+  "external_evidence_limits": "See BENCHMARKS.md and DATA.md. Passing contract checks does not certify historical accuracy, live providers, physical safety or business outcomes."
+}

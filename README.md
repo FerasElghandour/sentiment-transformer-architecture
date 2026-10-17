@@ -8,6 +8,15 @@ An independently implemented PyTorch transformer classifier with token/position 
 
 ![Implementation mechanism: Token IDs with right padding → Token and position embeddings → Causal and padding attention masks → Transformer encoder → Last valid token to two class logits](assets/mechanism.svg)
 
+
+
+## Train the transformer
+
+The released causal transformer now has a training-only vocabulary, exact-overlap removal, disjoint train/validation/test data, best-validation checkpoint export and raw-text inference. A new 10,000-train/2,000-test IMDB protocol reaches **74.9% accuracy ** with 128-token inputs.
+
+[Commands, artifacts and benchmark scope](BENCHMARKS.md) · [Versioned profiles](reproduction.json)
+
+
 ## Try a small example
 
 An untrained model checks that right padding leaves the same sequence output unchanged. This is an attention-mask check, not sentiment accuracy.
